@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "ReputationFlow",
+  "version": "1.0.0",
+  "description": "Manage your business reviews directly on Google Maps, Yelp, and Trustpilot with AI-powered replies.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.google.com/maps/*",
+    "https://maps.google.com/*",
+    "https://www.yelp.com/*",
+    "https://www.trustpilot.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/maps/*",
+        "https://maps.google.com/*"
+      ],
+      "js": ["content/google-maps.js"],
+      "css": ["styles/content.css"]
+    },
+    {
+      "matches": ["https://www.yelp.com/*"],
+      "js": ["content/yelp.js"],
+      "css": ["styles/content.css"]
+    },
+    {
+      "matches": ["https://www.trustpilot.com/*"],
+      "js": ["content/trustpilot.js"],
+      "css": ["styles/content.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  }
+}
