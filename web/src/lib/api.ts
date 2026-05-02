@@ -37,7 +37,8 @@ class ApiClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (response.status === 401) {
+    const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
+    if (response.status === 401 && !isAuthEndpoint) {
       const refreshed = await this.refreshToken();
       if (refreshed) {
         const retryHeaders = { ...requestHeaders, Authorization: `Bearer ${this.getToken()}` };
