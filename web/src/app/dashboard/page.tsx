@@ -102,12 +102,14 @@ export default function DashboardPage() {
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Reviews by Platform</h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data.businesses.flatMap((b) =>
-                Object.entries(b.stats.platformBreakdown).map(([platform, count]) => ({
-                  platform,
-                  reviews: count,
-                }))
-              )}>
+              <BarChart data={Object.entries(
+                data.businesses.reduce<Record<string, number>>((acc, b) => {
+                  Object.entries(b.stats.platformBreakdown).forEach(([platform, count]) => {
+                    acc[platform] = (acc[platform] || 0) + count;
+                  });
+                  return acc;
+                }, {})
+              ).map(([platform, reviews]) => ({ platform, reviews }))}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="platform" />
                 <YAxis />
