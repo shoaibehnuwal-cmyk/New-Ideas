@@ -35,25 +35,38 @@ export default function ReviewsPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function init() {
       setLoading(true);
       try {
-        const businesses = await api.getBusinesses() as Array<{ id: string; name: string }>;
+        let businesses = await api.getBusinesses() as Array<{ id: string; name: string }>;
+        if (cancelled) return;
         if (businesses.length === 0) {
-          const biz = await api.createBusiness({ name: 'My Business', category: 'General' }) as { id: string };
-          setBusinessId(biz.id);
-          await loadReviews(biz.id);
+          try {
+            const biz = await api.createBusiness({ name: 'My Business', category: 'General' }) as { id: string };
+            if (cancelled) return;
+            setBusinessId(biz.id);
+            await loadReviews(biz.id);
+          } catch {
+            if (cancelled) return;
+            businesses = await api.getBusinesses() as Array<{ id: string; name: string }>;
+            if (businesses.length > 0) {
+              setBusinessId(businesses[0].id);
+              await loadReviews(businesses[0].id);
+            }
+          }
         } else {
           setBusinessId(businesses[0].id);
           await loadReviews(businesses[0].id);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     init();
+    return () => { cancelled = true; };
   }, [loadReviews]);
 
   const filteredReviews = filter === 'all' ? reviews : reviews.filter((r) => r.sentiment === filter);
