@@ -130,7 +130,7 @@ export const ReviewController = {
       let sentimentScore: number | undefined;
 
       if (reviewText) {
-        const analysis = await AIService.analyzeSentiment(reviewText);
+        const analysis = await AIService.analyzeSentiment(reviewText, rating);
         sentiment = analysis.sentiment;
         sentimentScore = analysis.score;
       }
