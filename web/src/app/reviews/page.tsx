@@ -1,29 +1,107 @@
 'use client';
 
-import { useState } from 'react';
-import { Star, MessageSquare, Sparkles, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Star, MessageSquare, Sparkles, Filter, Plus, Trash2, X } from 'lucide-react';
 import { cn, getSentimentColor, formatDate } from '@/lib/utils';
+import { api } from '@/lib/api';
 import type { Review } from '@/types';
 
-const DEMO_REVIEWS: Review[] = [
-  { id: '1', business_id: '1', platform: 'google', reviewer_name: 'Sarah Johnson', rating: 5, review_text: 'Absolutely wonderful experience! The staff was incredibly friendly and professional. Best dental visit I\'ve ever had.', sentiment: 'positive', sentiment_score: 0.95, is_responded: true, reviewed_at: '2024-03-15T10:30:00Z', created_at: '2024-03-15T10:30:00Z' },
-  { id: '2', business_id: '1', platform: 'yelp', reviewer_name: 'Mike Chen', rating: 4, review_text: 'Great service and clean facility. Wait time was a bit long but overall satisfied.', sentiment: 'positive', sentiment_score: 0.72, is_responded: false, reviewed_at: '2024-03-14T14:00:00Z', created_at: '2024-03-14T14:00:00Z' },
-  { id: '3', business_id: '1', platform: 'google', reviewer_name: 'Emma Wilson', rating: 2, review_text: 'Disappointed with the service. Had to wait over an hour past my appointment time and felt rushed during the actual visit.', sentiment: 'negative', sentiment_score: 0.18, is_responded: false, reviewed_at: '2024-03-13T09:00:00Z', created_at: '2024-03-13T09:00:00Z' },
-  { id: '4', business_id: '1', platform: 'trustpilot', reviewer_name: 'James Brown', rating: 5, review_text: 'Top notch dental care. Dr. Smith is amazing and really takes time to explain everything.', sentiment: 'positive', sentiment_score: 0.91, is_responded: true, reviewed_at: '2024-03-12T16:30:00Z', created_at: '2024-03-12T16:30:00Z' },
-  { id: '5', business_id: '1', platform: 'yelp', reviewer_name: 'Lisa Park', rating: 3, review_text: 'Average experience. Nothing special but nothing terrible either.', sentiment: 'neutral', sentiment_score: 0.5, is_responded: false, reviewed_at: '2024-03-11T11:00:00Z', created_at: '2024-03-11T11:00:00Z' },
-];
-
 export default function ReviewsPage() {
-  const [reviews] = useState<Review[]>(DEMO_REVIEWS);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [businessId, setBusinessId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [generatedReply, setGeneratedReply] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const [newReview, setNewReview] = useState({
+    reviewerName: '',
+    rating: 5,
+    reviewText: '',
+    platform: 'google' as string,
+  });
+  const [addingReview, setAddingReview] = useState(false);
+
+  const loadReviews = useCallback(async (bizId: string) => {
+    try {
+      const data = await api.getReviews(bizId) as { reviews: Review[] };
+      setReviews(data.reviews || []);
+    } catch {
+      setReviews([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      setLoading(true);
+      try {
+        let businesses = await api.getBusinesses() as Array<{ id: string; name: string }>;
+        if (cancelled) return;
+        if (businesses.length === 0) {
+          try {
+            const biz = await api.createBusiness({ name: 'My Business', category: 'General' }) as { id: string };
+            if (cancelled) return;
+            setBusinessId(biz.id);
+            await loadReviews(biz.id);
+          } catch {
+            if (cancelled) return;
+            businesses = await api.getBusinesses() as Array<{ id: string; name: string }>;
+            if (businesses.length > 0) {
+              setBusinessId(businesses[0].id);
+              await loadReviews(businesses[0].id);
+            }
+          }
+        } else {
+          setBusinessId(businesses[0].id);
+          await loadReviews(businesses[0].id);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    init();
+    return () => { cancelled = true; };
+  }, [loadReviews]);
 
   const filteredReviews = filter === 'all' ? reviews : reviews.filter((r) => r.sentiment === filter);
 
+  async function handleAddReview(e: React.FormEvent) {
+    e.preventDefault();
+    if (!businessId) return;
+    setAddingReview(true);
+    try {
+      await api.addReview(businessId, newReview);
+      await loadReviews(businessId);
+      setShowAddForm(false);
+      setNewReview({ reviewerName: '', rating: 5, reviewText: '', platform: 'google' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add review');
+    } finally {
+      setAddingReview(false);
+    }
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!businessId) return;
+    setDeletingId(reviewId);
+    try {
+      await api.deleteReview(reviewId);
+      await loadReviews(businessId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete review');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   function handleGenerateReply(review: Review) {
     setReplyingTo(review.id);
-    // Simulate AI reply generation
     setTimeout(() => {
       const replies: Record<string, string> = {
         positive: `Thank you so much for your wonderful review! We're thrilled to hear about your positive experience and look forward to seeing you again.`,
@@ -34,12 +112,28 @@ export default function ReviewsPage() {
     }, 1000);
   }
 
-  function renderStars(rating: number) {
+  function renderStars(rating: number, interactive = false, onChange?: (r: number) => void) {
     return (
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map((star) => (
-          <Star key={star} className={cn('w-4 h-4', star <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200')} />
+          <Star
+            key={star}
+            className={cn(
+              'w-4 h-4',
+              star <= rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200',
+              interactive && 'cursor-pointer hover:text-yellow-300'
+            )}
+            onClick={interactive && onChange ? () => onChange(star) : undefined}
+          />
         ))}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading reviews...</div>
       </div>
     );
   }
@@ -48,7 +142,84 @@ export default function ReviewsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Review Management</h1>
+        <button onClick={() => setShowAddForm(true)} className="btn-primary inline-flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Add Review
+        </button>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600 flex justify-between items-center">
+          {error}
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* Add Review Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowAddForm(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Add New Review</h2>
+              <button onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddReview} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reviewer Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newReview.reviewerName}
+                  onChange={(e) => setNewReview((prev) => ({ ...prev, reviewerName: e.target.value }))}
+                  className="input-field"
+                  placeholder="e.g. John Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                <select
+                  value={newReview.platform}
+                  onChange={(e) => setNewReview((prev) => ({ ...prev, platform: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="google">Google</option>
+                  <option value="yelp">Yelp</option>
+                  <option value="trustpilot">Trustpilot</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="manual">Manual Entry</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                <div className="flex items-center gap-1">
+                  {renderStars(newReview.rating, true, (r) => setNewReview((prev) => ({ ...prev, rating: r })))}
+                  <span className="ml-2 text-sm text-gray-500">{newReview.rating}/5</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Review Text</label>
+                <textarea
+                  required
+                  value={newReview.reviewText}
+                  onChange={(e) => setNewReview((prev) => ({ ...prev, reviewText: e.target.value }))}
+                  className="input-field min-h-[100px]"
+                  placeholder="Write the review content..."
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={addingReview} className="btn-primary flex-1">
+                  {addingReview ? 'Adding...' : 'Add Review'}
+                </button>
+                <button type="button" onClick={() => setShowAddForm(false)} className="btn-secondary flex-1">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex items-center gap-2 mb-6">
@@ -66,6 +237,19 @@ export default function ReviewsPage() {
           </button>
         ))}
       </div>
+
+      {/* Empty state */}
+      {reviews.length === 0 && (
+        <div className="card text-center py-12">
+          <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No reviews yet</h3>
+          <p className="text-gray-500 mb-4">Add your first review to get started with reputation management.</p>
+          <button onClick={() => setShowAddForm(true)} className="btn-primary inline-flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Your First Review
+          </button>
+        </div>
+      )}
 
       {/* Reviews List */}
       <div className="space-y-4">
@@ -96,6 +280,14 @@ export default function ReviewsPage() {
                     Responded
                   </span>
                 )}
+                <button
+                  onClick={() => handleDeleteReview(review.id)}
+                  disabled={deletingId === review.id}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Delete review"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
 

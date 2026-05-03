@@ -12,6 +12,7 @@ router.get('/:businessId/stats', ReviewController.getReviewStats);
 router.post('/:businessId', ReviewController.addReview);
 router.post('/reply/:reviewId', aiLimiter, ReviewController.generateReply);
 router.post('/analyze/sentiment', aiLimiter, ReviewController.analyzeSentiment);
+router.delete('/:reviewId', ReviewController.deleteReview);
 router.get('/:businessId/insights', aiLimiter, ReviewController.getInsights);
 
 export default router;

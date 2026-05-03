@@ -15,9 +15,9 @@ export interface ReplyResult {
 }
 
 export const AIService = {
-  async analyzeSentiment(reviewText: string): Promise<SentimentResult> {
+  async analyzeSentiment(reviewText: string, rating?: number): Promise<SentimentResult> {
     if (!env.openaiApiKey) {
-      return inferSentimentFromText(reviewText);
+      return inferSentimentFromText(reviewText, rating);
     }
 
     try {
@@ -42,7 +42,7 @@ Respond ONLY with the JSON object, no additional text.`,
       const content = response.choices[0]?.message?.content || '';
       return JSON.parse(content) as SentimentResult;
     } catch {
-      return inferSentimentFromText(reviewText);
+      return inferSentimentFromText(reviewText, rating);
     }
   },
 
@@ -128,16 +128,31 @@ Keep it concise and practical.`,
   },
 };
 
-function inferSentimentFromText(text: string): SentimentResult {
+function inferSentimentFromText(text: string, rating?: number): SentimentResult {
+  // Use rating as primary signal when available
+  if (rating !== undefined) {
+    if (rating <= 2) {
+      return { sentiment: 'negative', score: rating / 5, summary: 'Low rating indicates negative experience.' };
+    } else if (rating >= 4) {
+      return { sentiment: 'positive', score: rating / 5, summary: 'High rating indicates positive experience.' };
+    }
+  }
+
   const lowerText = text.toLowerCase();
-  const positiveWords = ['great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'best', 'perfect', 'outstanding', 'recommend'];
-  const negativeWords = ['terrible', 'awful', 'horrible', 'worst', 'bad', 'poor', 'hate', 'disgusting', 'disappointing', 'avoid'];
+  const positiveWords = ['great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'love', 'best', 'perfect', 'outstanding'];
+  const negativeWords = ['terrible', 'awful', 'horrible', 'worst', 'bad', 'poor', 'hate', 'disgusting', 'disappointing', 'avoid', 'cold', 'slow', 'rude'];
+  const negationPatterns = ['not recommend', 'would not', 'do not', 'don\'t', 'wouldn\'t', 'never'];
 
   let positiveCount = 0;
   let negativeCount = 0;
 
   for (const word of positiveWords) {
     if (lowerText.includes(word)) positiveCount++;
+  }
+  if (lowerText.includes('recommend')) {
+    const isNegated = negationPatterns.some(p => lowerText.includes(p));
+    if (isNegated) negativeCount++;
+    else positiveCount++;
   }
   for (const word of negativeWords) {
     if (lowerText.includes(word)) negativeCount++;

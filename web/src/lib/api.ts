@@ -37,7 +37,8 @@ class ApiClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (response.status === 401) {
+    const isAuthEndpoint = endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register');
+    if (response.status === 401 && !isAuthEndpoint) {
       const refreshed = await this.refreshToken();
       if (refreshed) {
         const retryHeaders = { ...requestHeaders, Authorization: `Bearer ${this.getToken()}` };
@@ -123,6 +124,14 @@ class ApiClient {
 
   async analyzeSentiment(reviewText: string) {
     return this.request('/reviews/analyze/sentiment', { method: 'POST', body: { reviewText } });
+  }
+
+  async addReview(businessId: string, data: { platform: string; reviewerName: string; rating: number; reviewText: string }) {
+    return this.request(`/reviews/${businessId}`, { method: 'POST', body: data });
+  }
+
+  async deleteReview(reviewId: string) {
+    return this.request(`/reviews/${reviewId}`, { method: 'DELETE' });
   }
 
   // Analytics
