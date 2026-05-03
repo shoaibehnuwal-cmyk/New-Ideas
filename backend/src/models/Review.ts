@@ -70,6 +70,11 @@ export const ReviewModel = {
     return review;
   },
 
+  async delete(id: string): Promise<boolean> {
+    const count = await db(this.tableName).where({ id }).delete();
+    return count > 0;
+  },
+
   async getStats(businessId: string): Promise<{
     totalReviews: number;
     avgRating: number;

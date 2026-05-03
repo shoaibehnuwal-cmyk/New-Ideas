@@ -153,6 +153,30 @@ export const ReviewController = {
     }
   },
 
+  async deleteReview(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { reviewId } = req.params;
+
+      const review = await ReviewModel.findById(reviewId);
+      if (!review) {
+        res.status(404).json({ error: 'Review not found' });
+        return;
+      }
+
+      const business = await BusinessModel.findById(review.business_id);
+      if (!business || business.user_id !== req.userId) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+
+      await ReviewModel.delete(reviewId);
+      res.json({ message: 'Review deleted successfully' });
+    } catch (error) {
+      console.error('Delete review error:', error);
+      res.status(500).json({ error: 'Failed to delete review' });
+    }
+  },
+
   async getInsights(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { businessId } = req.params;

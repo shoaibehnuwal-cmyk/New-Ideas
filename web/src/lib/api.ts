@@ -126,6 +126,14 @@ class ApiClient {
     return this.request('/reviews/analyze/sentiment', { method: 'POST', body: { reviewText } });
   }
 
+  async addReview(businessId: string, data: { platform: string; reviewerName: string; rating: number; reviewText: string }) {
+    return this.request(`/reviews/${businessId}`, { method: 'POST', body: data });
+  }
+
+  async deleteReview(reviewId: string) {
+    return this.request(`/reviews/${reviewId}`, { method: 'DELETE' });
+  }
+
   // Analytics
   async getDashboard() {
     return this.request('/analytics/dashboard');
